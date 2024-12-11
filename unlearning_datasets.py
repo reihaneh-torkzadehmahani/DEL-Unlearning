@@ -233,4 +233,6 @@ def create_unlearning_dataset(dataset_name: str, batch_size: int,
     retain_dl = DataLoader(retain_subset, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=8)
 
     return {'train_dl': train_dl, 'test_dl': test_dl, 'forget_dl': forget_dl, 'retain_dl': retain_dl,
+            'forget_ds': forget_subset,
+            'retain_ds': retain_subset,
             'num_classes': num_classes}

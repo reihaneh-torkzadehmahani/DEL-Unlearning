@@ -1,5 +1,6 @@
 # ViT reference: https://github.com/lucidrains/vit-pytorch/blob/main/vit_pytorch/vit_for_small_dataset.py
-
+import copy
+import os
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -9,6 +10,7 @@ from einops.layers.torch import Rearrange
 import torchvision
 
 import logging
+
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 
@@ -34,6 +36,28 @@ def initialize_model(model_name: str, num_classes: int, device: str) -> nn.Modul
         raise ValueError('Model %s is not implemented yet...', model_name)
 
     return model
+
+
+def load_model(model_name: str, num_classes: int, load_dir: str, device: str) -> (nn.Module, nn.Module):
+    """ Loads the pretrained model.
+    Args:
+        model_name: The model.
+        num_classes: Number of classes.
+        load_dir: The directory to load the model from.
+        device: The device(e.g. cpu).
+    Returns:
+        The pretrained model and the corresponding initialized model.
+    """
+    if not os.path.exists(load_dir):
+        raise FileNotFoundError(f'Directory {load_dir} does not exist!')
+
+    model = initialize_model(model_name, num_classes, device)
+
+    init_model = copy.deepcopy(model)
+    model.load_state_dict(torch.load(load_dir, map_location=torch.device('cpu')))
+    logging.info('Loaded the pretrained model from %s', load_dir)
+
+    return model, init_model
 
 
 def save_model(model: nn.Module, save_dir: str) -> None:
