@@ -1,5 +1,6 @@
 # References : SSD and SalUn github repos
 
+import argparse
 import torch
 from torch.autograd import grad
 from tqdm import tqdm
@@ -128,6 +129,7 @@ def Wfisher(data_sets, model, criterion, alpha, batch_size, device):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# SSD
 # ---------------------------------------------------------------------------------------------------------------------
 class ParameterPerturber:
     def __init__(
@@ -352,3 +354,6 @@ def ssd_tuning(
     original_importances = ssd.calc_importance(full_train_dl)
     ssd.modify_weight(original_importances, sample_importances)
     return model
+
+
+# ---------------------------------------------------------------------------------------------------------------------

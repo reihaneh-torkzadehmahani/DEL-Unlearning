@@ -5,8 +5,8 @@ dataset='cifar10'
 model='resnet18'
 learning_rate=0.1
 epochs=30
-#forget_mode='non-iid'
-#forget_classes=(2 5)
+forget_mode='non-iid'
+forget_classes=(2 5)
 forget_data_dir='./data/cifar10_forget_indices.pth'
 
 ###----------------------.SVHN-ViT
@@ -30,8 +30,8 @@ forget_data_dir='./data/cifar10_forget_indices.pth'
 batch_size=128
 weight_decay=0
 forget_ratio=0.1
-forget_mode='iid'
-forget_classes=(-1)
+#forget_mode='iid'
+#forget_classes=(-1)
 base_dir='./data/'
 
 for r in {1..3}
@@ -40,7 +40,7 @@ do
 	  	                    --forget_data_dir $forget_data_dir\
 		                      --forget_ratio $forget_ratio\
 		                      --forget_mode $forget_mode\
-		                      --forget_classes ${forget_classes[@]}\
+		                      --forget_classes "${forget_classes[@]}"\
                           --model $model \
                           --batch_size $batch_size \
                           --learning_rate $learning_rate \

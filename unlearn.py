@@ -432,6 +432,7 @@ def main(argv):
         logging.info(f'The evaluation metric for SSD are : {loss_acc_retain_test_forget}')
 
     # ------------------------------------------------------------------------------------------------------------------
+    exit()
     else:
         salun_mask_name = _SALUN_BASE_NAME.value + '_with_' + str(_THRESHOLD.value) + '.pt'
         salun_mask = torch.load(salun_mask_name)
