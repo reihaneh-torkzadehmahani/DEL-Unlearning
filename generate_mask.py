@@ -73,8 +73,32 @@ def save_gradient_ratio(data_loaders, model, criterion, mask_save_dir, mode='gra
             for name in gradients:
                 gradients[name] = torch.abs_(gradients[name])
     elif granularity == 'channel':
-        # TODO: our mask , Fix the bash script when the threshold is a list of two elemnets
-        exit()
+        # ---------------------- Our mask : Per channel experiments, sum, l1 per channel -------------------------------
+        grads_ch_out = dict()
+        with torch.no_grad():
+            for name in gradients:
+                num_dims = gradients[name].ndim
+                if num_dims > 1:
+                    flatten_grads = torch.abs_(gradients[name]).view(gradients[name].shape[0], -1)
+
+                    if _MODEL.value == 'resnet18' or _MODEL.value == 'resnet50':
+                        top5_values, _ = torch.topk(flatten_grads, int(0.1 * len(flatten_grads)), dim=1)
+                        grads_ch_out[name] = top5_values.mean(dim=1)
+                    elif _MODEL.value == 'vit':
+                        grads_ch_out[name] = flatten_grads.mean(dim=1)
+                    else:
+                        logging.info(f'Model {_MODEL.value} is not supported!!')
+                        exit()
+                else:
+                    grads_ch_out[name] = torch.max(torch.abs_(gradients[name]))
+
+        with torch.no_grad():
+            for name in gradients:
+                num_dims = gradients[name].ndim
+                if num_dims > 1:
+                    for i in range(grads_ch_out[name].shape[0]):
+                        gradients[name][i, :] = grads_ch_out[name][i]
+        #  -------------------------------------------------------------------------------------------------------------
     else:
         logging.info(f'Granularity {granularity} is not supported!!')
 

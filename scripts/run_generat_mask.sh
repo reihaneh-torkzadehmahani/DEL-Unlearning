@@ -27,8 +27,12 @@ pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 
 ###----------------------- General parameters
 #---- Salun mask
-critic_criteria='grad'
-granularity='param'
+#critic_criteria='grad'
+#granularity='param'
+#----- Our mask
+critic_criteria='weighted_grad'
+granularity='channel'
+
 threshold=(1 0.3)
 forget_ratio=0.1
 python generate_mask.py --model $model\
