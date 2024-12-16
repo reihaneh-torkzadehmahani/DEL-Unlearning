@@ -29,16 +29,16 @@ pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 #---- Salun mask
 critic_criteria='grad'
 granularity='param'
-threshold=(1 3)
+threshold=(1 0.3)
 forget_ratio=0.1
-
 python generate_mask.py --model $model\
                         --dataset $dataset\
                         --forget_data_dir $forget_data_dir\
 		                    --forget_ratio $forget_ratio\
 		                    --forget_mode $forget_mode\
-		                    --forget_classes ${forget_classes[@]}\
+		                    --forget_classes "$(IFS=,; echo "${forget_classes[*]}")"\
                         --pretrained_dir $pretrained_dir\
                         --critic_criteria $critic_criteria\
                         --granularity $granularity\
-                        --threshold ${threshold[@]} \
+                        --threshold "$(IFS=,; echo "${threshold[*]}")"\
+

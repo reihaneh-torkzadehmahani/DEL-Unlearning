@@ -33,7 +33,7 @@ _CRITIC_CRITERIA = flags.DEFINE_enum('critic_criteria', 'grad',
                                      'Criticality criteria for the model params. (salun: grad, ours: weighted grad)')
 _GRANULARITY = flags.DEFINE_enum('granularity', 'param', ['channel', 'param'],
                                  'Granularity of  critical model params. (salun: params, ours: channel)')
-_THRESHOLD = flags.DEFINE_list('threshold', [1.0, 0.3], 'Threshold for the ratio of parameters for the mask.')
+_THRESHOLD = flags.DEFINE_list('threshold', None, 'Threshold for the ratio of parameters for the mask.')
 
 _RUN = flags.DEFINE_integer('run', 0, 'Run number')
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -114,6 +114,7 @@ def save_gradient_ratio(data_loaders, model, criterion, mask_save_dir, mode='gra
 
 
 def main(argv):
+    print(_THRESHOLD.value)
     forget_retain_test_dl = create_unlearning_dataset(_DATASET.value, _BATCH_SIZE.value,
                                                       _FORGET_RATIO.value, _FORGET_MODE.value, _FORGET_CLASSES.value,
                                                       _FORGET_DATA_DIR.value)

@@ -40,7 +40,7 @@ do
 	  	                    --forget_data_dir $forget_data_dir\
 		                      --forget_ratio $forget_ratio\
 		                      --forget_mode $forget_mode\
-		                      --forget_classes "${forget_classes[@]}"\
+		                      --forget_classes "$(IFS=,; echo "${forget_classes[*]}")"\
                           --model $model \
                           --batch_size $batch_size \
                           --learning_rate $learning_rate \
