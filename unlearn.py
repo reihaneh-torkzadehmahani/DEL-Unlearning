@@ -47,11 +47,7 @@ _UPDATE_LAYERS = flags.DEFINE_enum('update_layers',
                                    'Layers to update (the rest will be frozen).')
 _RELABEL = flags.DEFINE_bool('relabel', False, 'applying relabeling on forget set(salun unlearning algo)')
 
-_ALPHA = flags.DEFINE_float('alpha', 0.7, 'perturbation alpha')
 
-# _GRAD_MODE = flags.DEFINE_enum('grad_mode', 'descent',
-#                                ['negrad+', 'descent', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
-#                                'The forget set mode.')
 _GRAD_MODE = flags.DEFINE_enum('grad_mode', 'ssd',
                                ['negrad+', 'descent', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
                                'The forget set mode.')
@@ -83,60 +79,6 @@ def reset_params(mask: nn.Module, model: nn.Module, init_model: nn.Module):
     return reinit_model
 
 
-def perturb_params(mask: nn.Module, model: nn.Module, init_model: nn.Module,
-                   alpha: float = 1.0):
-    reinit_model = copy.deepcopy(model)
-    all_reset_params = 0
-    with torch.no_grad():
-        for (name, param), (init_name, init_param) in zip(reinit_model.named_parameters(),
-                                                          init_model.named_parameters()):
-            # mean_param = init_param.data.mean()
-            # var_param = init_param.data.var()
-            # rnd_param = torch.normal(mean=mean_param, std=torch.sqrt(var_param), size=init_param.size(), device=init_param.device)
-            # rnd_param = init_param.data
-            rnd_param = torch.normal(mean=0, std=1, size=init_param.size(), device=init_param.device)
-            param.data = (param.data * (1 - mask[name])) + (
-                    ((alpha * param.data) + ((1 - alpha) * rnd_param)) * mask[name])
-
-    return reinit_model
-
-
-def count_params(layer_names: list[str], num_channels: list[int], model: nn.Module):
-    """
-
-    :param layer_names:
-    :param num_channels:
-    :param model:
-    :return:
-        num_params: total numebr of parameters for the input list
-        sample_params_dict: a dict whose keys is all the layer names and values is a list of all the channels for that layer
-        num_params_list: List of number of parameters for each element of input lists
-    """
-    copy_model = copy.deepcopy(model)
-    num_params = 0
-    num_params_list = []
-    sample_params_dict = {}
-    for name, param in copy_model.named_parameters():
-        if name in layer_names:
-            indices = [index for index, layer in enumerate(layer_names) if layer == name]
-            sample_params_dict[name] = []
-            for i in indices:
-                if isinstance(num_channels[i][0], torch.Tensor):
-                    param_ind = num_channels[i][0].item()
-                else:
-                    param_ind = num_channels[i][0]
-                sample_params_dict[name].append(param_ind)
-                if 'fc' in name:
-                    params_i = param[:, param_ind].numel()
-                    num_params += params_i
-                else:
-                    params_i = param[param_ind].numel()
-                    num_params += params_i
-                num_params_list.append(params_i)
-
-    return num_params, sample_params_dict, num_params_list
-
-
 def fine_tune_epoch(model: nn.Module,
                     retain_dl: DataLoader,
                     forget_dl: DataLoader,
@@ -154,9 +96,13 @@ def fine_tune_epoch(model: nn.Module,
         forget_dl: The forget data loader.
         optimizer: The optimizer.
         scheduler: Learning rate scheduler.
+        mask: Mask of critical parameters.
+        grad_mode: Mode for taking gradients (e.g. 'descent').
+        epoch: Current epoch.
+        num_epochs: Total number of epochs.
     Returns:
-        A dict with 'loss_train', 'accuracy_train', 'loss_test', 'accuracy_test' keys whose values are
-        loss and accuracy on the train and test test respectively.
+        A dict with 'loss_train_epoch' and 'acc_retian_epoch' keys whose values are loss and accuracy on the retain set
+        in the current epoch.
     """
     model.train()
     loss_fn = nn.CrossEntropyLoss()
@@ -164,10 +110,7 @@ def fine_tune_epoch(model: nn.Module,
     num_all_samples = 0
     sum_loss = 0
 
-    print(len(retain_dl))
-    print(len(forget_dl))
     for (indices, images, labels), (_, forget_images, forget_labels) in zip(retain_dl, cycle(forget_dl)):
-        # TODO: the original version uses zip(retian_dl, cycle(forget_dl))
         images, labels = images.to(device), labels.to(device)
         forget_images, forget_labels = forget_images.to(device), forget_labels.to(device)
 
@@ -183,13 +126,9 @@ def fine_tune_epoch(model: nn.Module,
         elif grad_mode == 'negrad+':
             forget_logits = model(forget_images)
             loss_forget = loss_fn(forget_logits, forget_labels)
-            ## class 25 5k
             alpha = 0.99
-            ## all 5k
-            # alpha= 0.95
             loss_batch = (alpha * loss_retain) - ((1 - alpha) * loss_forget)
         elif grad_mode == 'l1_sparse':
-            # TODO
             alpha = 7e-5
             current_alpha = alpha * (1 - epoch / num_epochs)
 
@@ -221,35 +160,32 @@ def fine_tune_epoch(model: nn.Module,
     acc_epoch = sum(acc_all_batches) / num_all_samples
     return {'loss_retain_epoch': loss_epoch.item(), 'acc_retain_epoch': acc_epoch}
 
-
 def loss_accuracy_dataset(model: nn.Module, dataset: DataLoader) -> Dict[str, float]:
     """ Computes loss and accuracy of the model on a given set.
     Args:
         model: The model to be evaluated.
-        dataset: The dataset to evaluated the model on.
+        dataset: The dataset to evaluate the model on.
     Returns:
         A dict with 'loss' and 'acc' as the keys whose values are the loss and accuracy of the model on the dataset.
     """
+    loss_all_batches = []
     acc_all_batches = []
     num_all_samples = 0
     model.eval()
-    sum_loss = 0
-    loss_fn = nn.CrossEntropyLoss()
     with torch.no_grad():
         for _, images, labels in dataset:
             images, labels = images.to(device), labels.to(device)
             logits = model(images)
-            loss_batch = loss_fn(logits, labels)
-            sum_loss += loss_batch * len(labels)
+            loss_batch = nn.CrossEntropyLoss()(logits, labels)
+            loss_all_batches.append(loss_batch)
 
             prediction = torch.argmax(logits, 1)
             acc_all_batches.append((prediction == labels).sum().item())
             num_all_samples += len(labels)
 
-    loss_epoch = sum_loss / num_all_samples
+    loss_epoch = sum(loss_all_batches) / len(loss_all_batches)
     acc_epoch = sum(acc_all_batches) / num_all_samples
     return {'loss': loss_epoch.item(), 'acc': acc_epoch}
-
 
 def fine_tune(model: nn.Module,
               retain_dl: DataLoader,
@@ -258,9 +194,6 @@ def fine_tune(model: nn.Module,
               lr: float,
               weight_decay: float,
               num_epochs: int,
-              noisy_forget_dl: DataLoader = None,
-              forget_data_dir: str = None,
-              pred_depth_dir: str = None,
               update_layers: List[str] = [],
               mask=None,
               relabel=False,
@@ -275,32 +208,26 @@ def fine_tune(model: nn.Module,
             lr: Learning rate.
             weight_decay: Weight decay.
             num_epochs: Number of training epochs.
-            noisy_forget_dl: The noisy forget data loader.
             update_layers: Layers to update and not freeze.
-            forget_data_dir: Path to the forget indices.
-            pred_depth_dir: Path to the prediction depths so that we can evaluate the finetuned model on different
-                            subgroups made according to prediction depth.
+            mask: Mask of critical parameters.
+            relabel: True, if relabeling should be applied.
+            grad_mode: Mode for taking gradients (e.g. 'descent').
+
         Returns:
             A dict with 'retain_loss', 'retain_acc', 'test_loss','forget_loss', 'forget_acc', 'test_acc' keys whose
-            values are loss and accuracy on the train and test test respectively.
+            values are loss and accuracy on the train and test sets respectively.
     """
     retain_loss_all_epochs = []
     retain_accuracy_all_epochs = []
     forget_loss_all_epochs = []
     forget_accuracy_all_epochs = []
-    noisy_forget_loss_all_epochs = []
-    noisy_forget_accuracy_all_epochs = []
     test_loss_all_epochs = []
     test_accuracy_all_epochs = []
-    pd_accuracy_all_epochs = {}
     all_steps = num_epochs
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
     if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse'):
-        # TODO------------
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
     elif relabel:
-        # constant_lr = lambda epoch: 1.0
-        # scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=constant_lr, verbose=True)
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr, verbose=True)
     elif grad_mode == 'negrad+' or grad_mode == 'ga':
         constant_lr = lambda epoch: 1.0
@@ -361,9 +288,7 @@ def fine_tune(model: nn.Module,
 
     return {'retain_loss': retain_loss_all_epochs, 'retain_acc': retain_accuracy_all_epochs,
             'test_loss': test_loss_all_epochs, 'test_acc': test_accuracy_all_epochs,
-            'forget_loss': forget_loss_all_epochs, 'forget_acc': forget_accuracy_all_epochs,
-            'noisy_forget_loss': noisy_forget_loss_all_epochs, 'noisy_forget_acc': noisy_forget_accuracy_all_epochs,
-            'pred_depth_acc': pd_accuracy_all_epochs}
+            'forget_loss': forget_loss_all_epochs, 'forget_acc': forget_accuracy_all_epochs,}
 
 
 def main(argv):
@@ -381,6 +306,7 @@ def main(argv):
         pretrained_model = copy.deepcopy(model)
         # -- for cifar10/resnet18 IID alpha=42000, non-IID: alpha=1900
         # -- for svhn/vit IID alpha = 4000, non-IID: alpha=6000
+        # -- for imagenet100/resnet50 IID alpha=2000
         alpha = 2000
         criterion = nn.CrossEntropyLoss()
         reinitialized_model = Wfisher(
@@ -399,9 +325,8 @@ def main(argv):
     elif _GRAD_MODE.value == 'ssd':
         pretrained_model = copy.deepcopy(model)
         # -- n_forget = 100 : selection_weighting = 5, n_forget = 5000,
-        # -- (cifar10 dampening = 1 and selection weighting = 1 for iid, 16 for non-iid)??
-        # -- (svhn dampening = 3, selection_weighting = 5)
-        # selection_weighting = 16
+        # -- (cifar10 dampening = 1 and selection weighting = 1 for iid, 16 for non-iid)
+        # -- (svhn dampening = 3, selection_weighting = 5) (imagenet dampening = 1, selection weighting = 2)
         dampening_constant = 1
         selection_weighting = 2
 
@@ -440,8 +365,6 @@ def main(argv):
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
         if _RESET_METHOD.value == 'init':
             reinitialized_model = reset_params(salun_mask, model, init_model)
-        elif _RESET_METHOD.value == 'perturb':
-            reinitialized_model = perturb_params(salun_mask, model, init_model, _ALPHA.value)
         elif 'random' in _RESET_METHOD.value:
             salun_params_per_layer = {}
             random_mask = {}
@@ -488,17 +411,15 @@ def main(argv):
         elif _UPDATE_LAYERS.value == 'critical_fc':
             desired_layers_keys = []
             grad_mask = salun_mask
-            # grad_mask = random_mask
             for name, param in model.named_parameters():
                 if 'fc' in name or 'mlp_head' in name:
-                    print('Setting mask of linear probel to 1!')
+                    print('Setting mask of linear probe to 1!')
                     grad_mask[name] = torch.ones(grad_mask[name].shape).to(device)
         else:
             raise ValueError('Resetting strategy or update layer are not valid!!!!!!')
         logging.info('The layers that are being %s are %s', _RESET_METHOD.value, _UPDATE_LAYERS.value)
         logging.info('Computing the prediction depths....')
         pred_depth_dir = './data/base/prediction_depth'
-        # forget_data_dir = './data/forget_indices_vertical_0.pth'
         forget_data_dir = _FORGET_DATA_DIR.value
 
         if _RELABEL.value:
@@ -508,10 +429,7 @@ def main(argv):
             forget_dataset = copy.deepcopy(forget_retain_test_dl['clean_forget_dl'].dataset)
             if dataset_name == 'cifar10' or dataset_name == 'svhn':
                 forget_dataset.dataset.targets = np.random.randint(0, num_classes, len(forget_dataset.dataset.targets))
-                print(torch.unique(torch.tensor(forget_dataset.dataset.targets), return_counts=True))
             elif dataset_name == 'imagenet100':
-                print(forget_dataset.dataset)
-                print(len(forget_dataset))
                 forget_dataset = TinyImageNetRandom(forget_dataset)
             # step 2: create the new train loader containing the relabeled forget set and the retain set
             retain_dataset = forget_retain_test_dl['retain_dl'].dataset
@@ -522,7 +440,6 @@ def main(argv):
         else:
             fine_tune_loader = forget_retain_test_dl['retain_dl']
 
-        print(_GRAD_MODE.value)
         loss_acc_retain_test_forget = fine_tune(reinitialized_model,
                                                 fine_tune_loader,
                                                 forget_retain_test_dl['test_dl'],

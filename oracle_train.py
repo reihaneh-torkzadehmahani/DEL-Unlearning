@@ -36,7 +36,7 @@ def loss_accuracy_dataset(model: nn.Module, dataset: DataLoader) -> Dict[str, fl
     """ Computes loss and accuracy of the model on a given set.
     Args:
         model: The model to be evaluated.
-        dataset: The dataset to evaluated the model on.
+        dataset: The dataset to evaluate the model on.
     Returns:
         A dict with 'loss' and 'acc' as the keys whose values are the loss and accuracy of the model on the dataset.
     """
@@ -72,7 +72,7 @@ def train_epoch(model: nn.Module,
         scheduler: Learning rate scheduler.
     Returns:
         A dict with 'loss_train', 'accuracy_train', 'loss_test', 'accuracy_test' keys whose values are
-        loss and accuracy on the train and test test respectively.
+        loss and accuracy on the train and test sets respectively.
     """
     model.train()
     loss_fn = nn.CrossEntropyLoss()
@@ -119,7 +119,7 @@ def train(model: nn.Module,
             num_epochs: Number of training epochs
         Returns:
             A dict with 'train_loss', 'train_acc', 'test_loss', 'test_acc' keys whose values are
-            loss and accuracy on the train and test test respectively.
+            loss and accuracy on the train and test sets respectively.
     """
     retain_loss_all_epochs = []
     retain_accuracy_all_epochs = []
