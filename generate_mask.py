@@ -172,10 +172,12 @@ def main(argv):
     model, init_model = load_model(_MODEL.value, forget_retain_test_dl['num_classes'], _PRETRAINED_DIR.value, device)
     logging.info('Loaded the pretrained model!')
 
-    tmp_save_dir = "mask_{}_{}_{}_{}_with_".format(_FORGET_MODE.value,
-                                                   _FORGET_RATIO.value,
-                                                   _CRITIC_CRITERIA.value,
-                                                   _GRANULARITY.value)
+    tmp_save_dir = "mask_{}_{}_{}_{}_{}_{}_thr_".format(_MODEL.value,
+                                                        _DATASET.value,
+                                                        _FORGET_MODE.value,
+                                                        _FORGET_RATIO.value,
+                                                        _CRITIC_CRITERIA.value,
+                                                        _GRANULARITY.value)
     mask_save_dir = tmp_save_dir + "{}.pt"
 
     unlearn_data_loaders = OrderedDict(

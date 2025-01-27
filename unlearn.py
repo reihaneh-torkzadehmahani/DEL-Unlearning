@@ -54,26 +54,15 @@ _PRETRAINED_DIR = flags.DEFINE_string('pretrained_dir',
                                       'The directory where the pretrained model is.')
 
 _RUN = flags.DEFINE_integer('run', 0, 'Run number')
-
+_MASK_DIR = flags.DEFINE_string('mask_dir',
+                                './data/mask_iid_0.1_grad_param_with_0.3.pt',
+                                'The directory of mask for critical parameters.')
 #  =================================================================================================
-
-_THRESHOLD = flags.DEFINE_float('threshold', 0.16874820229, 'Salun threshold')
-_SALUN_BASE_NAME = flags.DEFINE_string('salun_base_name',
-                                       'our',
-                                       'The base name for salun mask.')
-
-_RESET_METHOD = flags.DEFINE_enum('reset_method',
-                                  'init', ['init', 'perturb', 'init_random', 'none_random', 'none'],
-                                  'Parameter resetting strategy.')
-
-_UPDATE_LAYERS = flags.DEFINE_enum('update_layers',
-                                   'critical', ['all', 'fc', 'critical', 'critical_fc'],
-                                   'Layers to update (the rest will be frozen).')
 _RELABEL = flags.DEFINE_bool('relabel', False, 'applying relabeling on forget set(salun unlearning algo)')
 
 
-_GRAD_MODE = flags.DEFINE_enum('grad_mode', 'ssd',
-                               ['negrad+', 'descent', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
+_GRAD_MODE = flags.DEFINE_enum('grad_mode', 'ft',
+                               ['negrad+', 'descent', 'ft', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
                                'The forget set mode.')
 np.random.seed(0)
 random.seed(25)
@@ -249,7 +238,7 @@ def fine_tune(model: nn.Module,
     test_accuracy_all_epochs = []
     all_steps = num_epochs
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse'):
+    if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse' or grad_mode == 'ft'):
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
     elif relabel:
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr, verbose=True)
@@ -381,58 +370,16 @@ def main(argv):
         logging.info(f'The evaluation metric for SSD are : {loss_acc_retain_test_forget}')
 
     # ------------------------------------------------------------------------------------------------------------------
-    exit()
+
     else:
-        salun_mask_name = _SALUN_BASE_NAME.value + '_with_' + str(_THRESHOLD.value) + '.pt'
-        salun_mask = torch.load(salun_mask_name)
-        logging.info('Loaded Salun mask from %s', salun_mask_name)
+        mask_dir = _MASK_DIR.value
+        salun_mask = torch.load(mask_dir)
+        logging.info('Loaded Salun mask from %s', mask_dir)
+        # --- CLEAN up to here !!!
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
-        if _RESET_METHOD.value == 'init':
+        if _GRAD_MODE.value == 'ft':
             reinitialized_model = reset_params(salun_mask, model, init_model)
-        elif 'random' in _RESET_METHOD.value:
-            salun_params_per_layer = {}
-            random_mask = {}
-            all_random_params = 0
-            all_mask_params = 0
-            for name, param in model.named_parameters():
-                print(salun_mask[name].ndim)
-                dims_to_sum = list(range(0, salun_mask[name].ndim))
-                salun_params_per_layer[name] = torch.sum(salun_mask[name].cpu(), dims_to_sum)
-                all_mask_params += salun_params_per_layer[name]
-                random_mask[name] = torch.zeros(param.shape).to(device)
-                random_mask_layer_params = 0
-                all_output_channels = list(range((param.shape[0])))
-                while random_mask_layer_params < salun_params_per_layer[name]:
-                    random_ch = random.sample(all_output_channels, 1)[0]
-                    all_output_channels.remove(random_ch)
-                    random_mask[name][random_ch] = torch.ones(param[random_ch].shape).to(device)
-                    random_mask_layer_params += torch.sum(random_mask[name][random_ch].cpu())
-                all_random_params += random_mask_layer_params
 
-            print('All random params are :', all_random_params)
-            print('All input mask params were: ', all_mask_params)
-            salun_mask = random_mask
-            if 'init' in _RESET_METHOD.value:
-                reinitialized_model = reset_params(random_mask, model, init_model)
-            elif 'none' in _RESET_METHOD.value:
-                reinitialized_model = model
-        elif _RESET_METHOD.value == 'none':
-            print('Not resetting the params!!!!')
-            reinitialized_model = model
-
-        if _UPDATE_LAYERS.value == 'all':
-            desired_layers_keys = []
-            grad_mask = None
-        elif _UPDATE_LAYERS.value == 'fc':
-            if model_name == 'resnet18':
-                desired_layers_keys = 'resnet18.fc'
-                grad_mask = None
-            else:
-                raise ValueError('update fc not implemented for model'.format(model_name))
-        elif _UPDATE_LAYERS.value == 'critical':
-            desired_layers_keys = []
-            grad_mask = salun_mask
-        elif _UPDATE_LAYERS.value == 'critical_fc':
             desired_layers_keys = []
             grad_mask = salun_mask
             for name, param in model.named_parameters():
@@ -440,14 +387,13 @@ def main(argv):
                     print('Setting mask of linear probe to 1!')
                     grad_mask[name] = torch.ones(grad_mask[name].shape).to(device)
         else:
-            raise ValueError('Resetting strategy or update layer are not valid!!!!!!')
-        logging.info('The layers that are being %s are %s', _RESET_METHOD.value, _UPDATE_LAYERS.value)
-        logging.info('Computing the prediction depths....')
-        pred_depth_dir = './data/base/prediction_depth'
-        forget_data_dir = _FORGET_DATA_DIR.value
+            print('Not resetting the params and no freezing (update all layers)!!!!')
+            reinitialized_model = model
+            desired_layers_keys = []
+            grad_mask = None
 
         if _RELABEL.value:
-            print('relabeling is avtive!!!!')
+            print('relabeling is active!!!!')
             #### Unlearning steps : relabel F, create F`+R=T`,finetune on T` while grads=grads*mask (update only critical)
             #### Step 1: relabel the forget set s.t. all the labels are flipped
             forget_dataset = copy.deepcopy(forget_retain_test_dl['clean_forget_dl'].dataset)
@@ -471,9 +417,6 @@ def main(argv):
                                                 _LR.value,
                                                 _WD.value,
                                                 _N_EPOCHS.value,
-                                                forget_retain_test_dl['noisy_forget_dl'],
-                                                forget_data_dir,
-                                                pred_depth_dir,
                                                 update_layers=desired_layers_keys,
                                                 mask=grad_mask,
                                                 relabel=_RELABEL.value,
@@ -489,27 +432,19 @@ def main(argv):
 
     logging.info('Saving the unlearning evaluation statistics and model ...')
     save_dir = os.path.join(_BASE_DIR.value,
-                            '{}_{}_reset_finetune_stats_{}_{}_{}_{}_{}_relabel_{}_{}_run_{}.pth'.format(
-                                _SALUN_BASE_NAME.value,
-                                _THRESHOLD.value,
+                            '{}_{}_reset_finetune_stats_{}_relabel_{}_{}_run_{}.pth'.format(
                                 _MODEL.value,
                                 _DATASET.value,
                                 _FORGET_MODE.value,
-                                _RESET_METHOD.value,
-                                _UPDATE_LAYERS.value,
                                 _RELABEL.value,
                                 _GRAD_MODE.value,
                                 _RUN.value))
 
     save_dir_model = os.path.join(_BASE_DIR.value,
-                                  '{}_{}_reset_finetune_model_{}_{}_{}_{}_{}_relabel_{}_{}_run_{}.pth'.format(
-                                      _SALUN_BASE_NAME.value,
-                                      _THRESHOLD.value,
+                                  '{}_{}_reset_finetune_model_{}_relabel_{}_{}_run_{}.pth'.format(
                                       _MODEL.value,
                                       _DATASET.value,
                                       _FORGET_MODE.value,
-                                      _RESET_METHOD.value,
-                                      _UPDATE_LAYERS.value,
                                       _RELABEL.value,
                                       _GRAD_MODE.value,
                                       _RUN.value))

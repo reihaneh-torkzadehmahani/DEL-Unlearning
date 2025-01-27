@@ -34,7 +34,7 @@ forget_ratio=0.1
 forget_mode='iid'
 forget_classes=(-1)
 base_dir='./data/'
-threshold=1
+mask_dir='./data/mask_resnet18_cifar10_iid_0.1_weighted_grad_channel_thr_0.3.pt'
 
 
 for r in {1..3}
@@ -46,7 +46,7 @@ do
 	    				         --forget_mode $forget_mode \
 	    				         --forget_ratio $forget_ratio\
 	    				         --forget_classes ${forget_classes[@]}\
-    					         --threshold $threshold \
+    					         --mask_dir $mask_dir \
 	    	               --epochs $epochs \
 								       --run $r \
 
