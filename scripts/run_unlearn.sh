@@ -3,7 +3,7 @@
 ###----------------------.CIFAR10-ResNet18
 dataset='cifar10'
 model='resnet18'
-learning_rate=0.1
+learning_rate=0.015
 epochs=30
 #forget_mode='non-iid'
 #forget_classes=(2 5)
@@ -46,6 +46,7 @@ do
 	    				         --forget_mode $forget_mode \
 	    				         --forget_ratio $forget_ratio\
 	    				         --forget_classes ${forget_classes[@]}\
+	    				         --learning_rate $learning_rate\
     					         --mask_dir $mask_dir \
 	    	               --epochs $epochs \
 								       --run $r \

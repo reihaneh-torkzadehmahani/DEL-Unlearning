@@ -37,7 +37,7 @@ FLAGS = flags.FLAGS
 _DATASET = flags.DEFINE_enum('dataset', 'cifar10', ['cifar10', 'svhn', 'cifar100', 'imagenet100'], 'Dataset')
 _MODEL = flags.DEFINE_enum('model', 'resnet18', ['resnet18', 'vit', 'resnet50'], 'Model')
 _BATCH_SIZE = flags.DEFINE_integer('batch_size', 128, 'Batch Size')
-_LR = flags.DEFINE_float('learning_rate', 0.1, 'Learning Rate')
+_LR = flags.DEFINE_float('learning_rate', 0.015, 'Learning Rate')
 _WD = flags.DEFINE_float('weight_decay', 0, 'Weight Decay')
 _N_EPOCHS = flags.DEFINE_integer('epochs', 50, 'Number of Epochs')
 _BASE_DIR = flags.DEFINE_string('base_dir', './data/', 'The base directory to save the model.')
@@ -61,8 +61,8 @@ _MASK_DIR = flags.DEFINE_string('mask_dir',
 _RELABEL = flags.DEFINE_bool('relabel', False, 'applying relabeling on forget set(salun unlearning algo)')
 
 
-_GRAD_MODE = flags.DEFINE_enum('grad_mode', 'ft',
-                               ['negrad+', 'descent', 'ft', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
+_GRAD_MODE = flags.DEFINE_enum('grad_mode', 'reset+finetune',
+                               ['negrad+', 'descent', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
                                'The forget set mode.')
 np.random.seed(0)
 random.seed(25)
@@ -130,7 +130,7 @@ def fine_tune_epoch(model: nn.Module,
         logits = model(images)
         loss_retain = loss_fn(logits, labels)
 
-        if grad_mode == 'descent' or grad_mode == 'ft':
+        if grad_mode == 'descent' or grad_mode == 'reset+finetune':
             loss_batch = loss_retain
         elif grad_mode == 'ga':
             forget_logits = model(forget_images)
@@ -238,7 +238,7 @@ def fine_tune(model: nn.Module,
     test_accuracy_all_epochs = []
     all_steps = num_epochs
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse' or grad_mode == 'ft'):
+    if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse' or grad_mode == 'reset+finetune'):
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
     elif relabel:
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr, verbose=True)
@@ -375,22 +375,21 @@ def main(argv):
         mask_dir = _MASK_DIR.value
         salun_mask = torch.load(mask_dir)
         logging.info('Loaded Salun mask from %s', mask_dir)
-        # --- CLEAN up to here !!!
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
-        if _GRAD_MODE.value == 'ft':
+        if _GRAD_MODE.value == 'reset+finetune':
             reinitialized_model = reset_params(salun_mask, model, init_model)
-
             desired_layers_keys = []
             grad_mask = salun_mask
             for name, param in model.named_parameters():
                 if 'fc' in name or 'mlp_head' in name:
-                    print('Setting mask of linear probe to 1!')
+                    logging.info('Setting mask of linear probe to 1!')
                     grad_mask[name] = torch.ones(grad_mask[name].shape).to(device)
         else:
-            print('Not resetting the params and no freezing (update all layers)!!!!')
+            logging.info('Not resetting the params and no freezing (update all layers)!!!!')
             reinitialized_model = model
             desired_layers_keys = []
             grad_mask = None
+        # --- CLEAN up to here !!!
 
         if _RELABEL.value:
             print('relabeling is active!!!!')
