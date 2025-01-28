@@ -7,7 +7,6 @@ learning_rate=0.1
 epochs=30
 forget_mode='non-iid'
 forget_classes=(2 5)
-forget_data_dir='./data/cifar10_forget_indices.pth'
 
 ###----------------------.SVHN-ViT
 #dataset='svhn'
@@ -37,7 +36,6 @@ base_dir='./data/'
 for r in {1..3}
 do
   python oracle_train.py  --dataset $dataset \
-	  	                    --forget_data_dir $forget_data_dir\
 		                      --forget_ratio $forget_ratio\
 		                      --forget_mode $forget_mode\
 		                      --forget_classes "$(IFS=,; echo "${forget_classes[*]}")"\

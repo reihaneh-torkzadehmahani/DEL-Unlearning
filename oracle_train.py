@@ -43,9 +43,6 @@ _WD = flags.DEFINE_float('weight_decay', 0, 'Weight Decay')
 _N_EPOCHS = flags.DEFINE_integer('epochs', 50, 'Number of Epochs')
 _BASE_DIR = flags.DEFINE_string('base_dir', './data/', 'The base directory to save the model.')
 
-_FORGET_DATA_DIR = flags.DEFINE_string('forget_data_dir',
-                                       './data/cifar10_forget_indices.pth',
-                                       'The directory of the forget indices and classes.')
 _FORGET_RATIO = flags.DEFINE_float('forget_ratio', 0.1, 'Ratio of forget samples')
 _FORGET_MODE = flags.DEFINE_enum('forget_mode', 'iid', ['iid', 'non-iid'], 'Mode of creating forget set.')
 _FORGET_CLASSES = flags.DEFINE_list('forget_classes', [-1], 'Classes of forget samples')
@@ -229,9 +226,10 @@ def plot_save_stats(stats_dict: Dict[str, List[float]], save_dir: str) -> None:
 
 
 def main(argv):
+    forget_data_dir = os.path.join(_BASE_DIR.value, '{}_{}_forget_indices.pth'.format(_DATASET.value, _FORGET_MODE.value))
     forget_retain_test_dl = create_unlearning_dataset(_DATASET.value, _BATCH_SIZE.value,
                                                       _FORGET_RATIO.value, _FORGET_MODE.value, _FORGET_CLASSES.value,
-                                                      _FORGET_DATA_DIR.value)
+                                                      forget_data_dir)
 
     logging.info('Created the retain, forget, train and test datasets!')
 

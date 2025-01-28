@@ -5,9 +5,9 @@ dataset='cifar10'
 model='resnet18'
 learning_rate=0.015
 epochs=30
-#forget_mode='non-iid'
-#forget_classes=(2 5)
-forget_data_dir='./data/cifar10_forget_indices.pth'
+forget_mode='non-iid'
+forget_classes=(2 5)
+forget_data_dir='./data/cifar10_non-iid_forget_indices.pth'
 pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 
 ###----------------------.SVHN-ViT
@@ -31,10 +31,10 @@ pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 batch_size=128
 weight_decay=0
 forget_ratio=0.1
-forget_mode='iid'
-forget_classes=(-1)
+#forget_mode='iid'
+#forget_classes=(-1)
 base_dir='./data/'
-mask_dir='./data/mask_resnet18_cifar10_iid_0.1_weighted_grad_channel_thr_0.3.pt'
+mask_dir='./data/mask_resnet18_cifar10_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
 
 
 for r in {1..3}

@@ -3,10 +3,10 @@
 ###----------------------.CIFAR10-ResNet18
 dataset='cifar10'
 model='resnet18'
-#forget_mode='non-iid'
-#forget_classes=(2 5)
-forget_mode='iid'
-forget_classes=(-1)
+forget_mode='non-iid'
+forget_classes=(2 5)
+#forget_mode='iid'
+#forget_classes=(-1)
 forget_data_dir='./data/cifar10_forget_indices.pth'
 pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 
