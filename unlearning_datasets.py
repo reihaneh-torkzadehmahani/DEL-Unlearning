@@ -68,6 +68,18 @@ class ImageNet100(Dataset):
         label = item["label"]
         return idx, image, label
 
+class ImageNet100Random(Dataset):
+    def __init__(self, dataset):
+        self.dataset = dataset
+        self.random_labels = np.random.randint(0, 100, 126689)
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        g_index, image, label = self.dataset[index]
+        label = self.random_labels[g_index]
+        return index, image, label
+
 
 def create_dataset(dataset_name: str, batch_size: int) -> Dict[str, Any]:
     """Creates the train/test datasets.
@@ -138,6 +150,7 @@ def create_dataset(dataset_name: str, batch_size: int) -> Dict[str, Any]:
         test_ds.set_transform(transform=validation_transform)
         train_ds = ImageNet100(train_ds)
         test_ds = ImageNet100(test_ds)
+        train_ds.targets = [train_ds[i][1] for i in range(len(train_ds))]
 
     else:
         raise ValueError('Dataset %s is not implemented yet...', dataset_name)
@@ -232,7 +245,7 @@ def create_unlearning_dataset(dataset_name: str, batch_size: int,
     test_dl = DataLoader(test_ds, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=8)
 
     if os.path.exists(forget_data_dir):
-        forget_indices = torch.load(forget_data_dir)
+        forget_indices = torch.load(forget_data_dir, weights_only=True)
         logging.info('Loaded forget indices from %s', forget_data_dir)
     else:
         if forget_mode == 'iid':

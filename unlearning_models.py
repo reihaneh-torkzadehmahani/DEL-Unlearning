@@ -78,7 +78,7 @@ def load_model(model_name: str, num_classes: int, load_dir: str, device: str) ->
     model = initialize_model(model_name, num_classes, device)
 
     init_model = copy.deepcopy(model)
-    model.load_state_dict(torch.load(load_dir, map_location=torch.device('cpu')))
+    model.load_state_dict(torch.load(load_dir, weights_only=True,  map_location=torch.device('cpu')))
     logging.info('Loaded the pretrained model from %s', load_dir)
 
     return model, init_model
@@ -100,8 +100,7 @@ def save_model(model: nn.Module, save_dir: str) -> None:
 class ResNet18(nn.Module):
     def __init__(self, num_classes):
         super(ResNet18, self).__init__()
-        self.resnet18 = torchvision.models.resnet18(weights=None,
-                                                    num_classes=num_classes)
+        self.resnet18 = torchvision.models.resnet18(num_classes=num_classes)
         if num_classes == 10:
             self.resnet18.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
             self.resnet18.maxpool = nn.Identity()
@@ -113,8 +112,7 @@ class ResNet18(nn.Module):
 class ResNet50(nn.Module):
     def __init__(self, num_classes):
         super(ResNet50, self).__init__()
-        self.resnet50 = torchvision.models.resnet50(weights=None,
-                                                    num_classes=num_classes)
+        self.resnet50 = torchvision.models.resnet50(num_classes=num_classes)
         if num_classes == 200:
             self.resnet50.conv1 = nn.Conv2d(3, 64, 3, 1, 1, bias=False)
             self.resnet50.maxpool = nn.Identity()

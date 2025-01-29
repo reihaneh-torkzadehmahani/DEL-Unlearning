@@ -57,7 +57,7 @@ _MASK_DIR = flags.DEFINE_string('mask_dir',
                                 './data/mask_resnet18_cifar10_iid_0.1_weighted_grad_channel_thr_0.3.pt',
                                 'The directory of mask for critical parameters.')
 _UNLEARNING_ALG = flags.DEFINE_enum('unlearning_alg', 'reset+finetune',
-                               ['negrad+', 'descent', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
+                               ['negrad+', 'relabeling', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
                                'Unlearning algorithm.')
 
 _RUN = flags.DEFINE_integer('run', 0, 'Run number')
@@ -231,8 +231,8 @@ def fine_tune(model: nn.Module,
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
     if  unlearning_alg == 'l1_sparse' or unlearning_alg == 'reset+finetune':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
-    elif unlearning_alg == 'relabel':
-        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr, verbose=True)
+    elif unlearning_alg == 'relabeling':
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr)
     elif unlearning_alg == 'negrad+' or unlearning_alg == 'ga':
         constant_lr = lambda epoch: 1.0
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=constant_lr, verbose=True)
@@ -250,7 +250,6 @@ def fine_tune(model: nn.Module,
     forget_accuracy_all_epochs.append(forget_loss_acc['acc'])
 
     if len(update_layers) > 0:
-        print(sum(p.numel() for p in model.parameters() if p.requires_grad))
         for param in model.parameters():
             param.requires_grad = False
         for name, param in model.named_parameters():
@@ -259,7 +258,6 @@ def fine_tune(model: nn.Module,
             name_no_weight_no_bias = name_no_weight_no_bias.rstrip('.bias')
             if name_no_weight_no_bias in update_layers:
                 param.requires_grad = True
-        print(sum(p.numel() for p in model.parameters() if p.requires_grad))
 
     with tqdm(total=num_epochs, desc='Training', unit='epoch') as pbar:
         for epoch in range(num_epochs):
@@ -364,8 +362,8 @@ def main(argv):
 
     else:
         mask_dir = _MASK_DIR.value
-        salun_mask = torch.load(mask_dir)
-        logging.info('Loaded Salun mask from %s', mask_dir)
+        salun_mask = torch.load(mask_dir, weights_only=True)
+        logging.info('Loaded the mask from %s', mask_dir)
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
         if _UNLEARNING_ALG.value == 'reset+finetune':
             reinitialized_model = reset_params(salun_mask, model, init_model)
@@ -380,17 +378,17 @@ def main(argv):
             reinitialized_model = model
             desired_layers_keys = []
             grad_mask = None
-        # --- CLEAN up to here !!!
 
-        if _UNLEARNING_ALG.value == 'relabel':
+        if _UNLEARNING_ALG.value == 'relabeling':
             logging.info('Relabeling is applied!!!!')
             #### Unlearning steps : relabel F, create F`+R=T`,finetune on T` while grads=grads*mask (update only critical)
             #### Step 1: relabel the forget set s.t. all the labels are flipped
-            forget_dataset = copy.deepcopy(forget_retain_test_dl['clean_forget_dl'].dataset)
-            if dataset_name == 'cifar10' or dataset_name == 'svhn':
+            forget_dataset = copy.deepcopy(forget_retain_test_dl['forget_dl'].dataset)
+            if _DATASET.value == 'cifar10' or _DATASET.value == 'svhn':
+                num_classes = 10
                 forget_dataset.dataset.targets = np.random.randint(0, num_classes, len(forget_dataset.dataset.targets))
             elif dataset_name == 'imagenet100':
-                forget_dataset = TinyImageNetRandom(forget_dataset)
+                forget_dataset = ImageNet100Random(forget_dataset)
             # step 2: create the new train loader containing the relabeled forget set and the retain set
             retain_dataset = forget_retain_test_dl['retain_dl'].dataset
             train_dataset = torch.utils.data.ConcatDataset([forget_dataset, retain_dataset])
