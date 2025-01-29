@@ -6,7 +6,7 @@ for a given set of examples, and a simple unlearning algorithm that finetunes on
 we want to retain. Our experiments on different datasets, forget sets and metrics reveal that DEL outperforms prior work
 in producing better trade-offs between unlearning performance and accuracy.
 
-![](data/localized_unlearning.png)
+![](localized_unlearning.png)
 
 # Running Experiments 
 The current version supports three dataset/model settings: CIFAR-10/ResNet-18, SVHN/ViT and ImageNet-100/ResNet-50.
