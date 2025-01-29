@@ -37,7 +37,6 @@ base_dir='./data/'
 mask_dir='./data/mask_resnet18_cifar10_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
 unlearning_alg='reset+finetune'
 
-
 for r in {1..3}
 do
     python unlearn.py  --dataset $dataset\

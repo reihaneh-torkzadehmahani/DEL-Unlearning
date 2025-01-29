@@ -249,11 +249,11 @@ def main(argv):
     logging.info('Trained the model and evaluated it on forget, retain and test set!')
 
     retain_loss_acc = loss_accuracy_dataset(model, forget_retain_test_dl['retain_dl'])
-    clean_forget_loss_acc = loss_accuracy_dataset(model, forget_retain_test_dl['forget_dl'])
+    forget_loss_acc = loss_accuracy_dataset(model, forget_retain_test_dl['forget_dl'])
     test_loss_acc = loss_accuracy_dataset(model, forget_retain_test_dl['test_dl'])
     logging.info('Oracle retain, forget and test accuracies are: %s, %s and %s',
                  retain_loss_acc['acc'],
-                 clean_forget_loss_acc['acc'],
+                 forget_loss_acc['acc'],
                  test_loss_acc['acc'])
 
     logging.info('Saving the oracle model...')

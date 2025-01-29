@@ -54,10 +54,10 @@ _PRETRAINED_DIR = flags.DEFINE_string('pretrained_dir',
                                       'The directory where the pretrained model is.')
 
 _MASK_DIR = flags.DEFINE_string('mask_dir',
-                                './data/mask_resnet18_cifar10_iid_0.1_weighted_grad_channel_thr_0.3.pt',
+                                None,
                                 'The directory of mask for critical parameters.')
 _UNLEARNING_ALG = flags.DEFINE_enum('unlearning_alg', 'reset+finetune',
-                               ['negrad+', 'relabeling', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
+                               ['negrad+', 'relabeling', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd', 'finetune'],
                                'Unlearning algorithm.')
 
 _RUN = flags.DEFINE_integer('run', 0, 'Run number')
@@ -150,7 +150,7 @@ def fine_tune_epoch(model: nn.Module,
         logits = model(images)
         loss_retain = loss_fn(logits, labels)
 
-        if unlearning_alg == 'relabeling' or unlearning_alg == 'reset+finetune':
+        if unlearning_alg == 'relabeling' or unlearning_alg == 'reset+finetune' or unlearning_alg == 'finetune':
             loss_batch = loss_retain
         elif unlearning_alg == 'ga':
             forget_logits = model(forget_images)
@@ -229,7 +229,7 @@ def fine_tune(model: nn.Module,
     test_accuracy_all_epochs = []
     all_steps = num_epochs
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    if  unlearning_alg == 'l1_sparse' or unlearning_alg == 'reset+finetune':
+    if  unlearning_alg == 'l1_sparse' or unlearning_alg == 'reset+finetune' or unlearning_alg == 'finetune':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
     elif unlearning_alg == 'relabeling':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr)
@@ -361,25 +361,21 @@ def main(argv):
     # ------------------------------------------------------------------------------------------------------------------
 
     else:
-        mask_dir = _MASK_DIR.value
-        salun_mask = torch.load(mask_dir, weights_only=True)
-        logging.info('Loaded the mask from %s', mask_dir)
+        if _UNLEARNING_ALG.value == 'reset+finetune' or _UNLEARNING_ALG.value == 'relabeling':
+            mask_dir = _MASK_DIR.value
+            localization_mask = torch.load(mask_dir, weights_only=True)
+            grad_mask = localization_mask
+            logging.info('Loaded the mask from %s', mask_dir)
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
         if _UNLEARNING_ALG.value == 'reset+finetune':
-            reinitialized_model = reset_params(salun_mask, model, init_model)
+            reinitialized_model = reset_params(localization_mask, model, init_model)
             desired_layers_keys = []
-            grad_mask = salun_mask
             for name, param in model.named_parameters():
                 if 'fc' in name or 'mlp_head' in name:
-                    logging.info('Setting mask of linear probe to 1!')
                     grad_mask[name] = torch.ones(grad_mask[name].shape).to(device)
-        else:
-            logging.info('Not resetting the params and no freezing (update all layers)!!!!')
-            reinitialized_model = model
-            desired_layers_keys = []
-            grad_mask = None
+            fine_tune_loader = forget_retain_test_dl['retain_dl']
 
-        if _UNLEARNING_ALG.value == 'relabeling':
+        elif _UNLEARNING_ALG.value == 'relabeling':
             logging.info('Relabeling is applied!!!!')
             #### Unlearning steps : relabel F, create F`+R=T`,finetune on T` while grads=grads*mask (update only critical)
             #### Step 1: relabel the forget set s.t. all the labels are flipped
@@ -397,7 +393,13 @@ def main(argv):
                                                            shuffle=True,
                                                            num_workers=10)
             # step 3: finetune the new model on the new training loader while only finetuning the params with value 1 in mask
+            reinitialized_model = model
+            desired_layers_keys = []
         else:
+            logging.info('Not resetting the params and no freezing (update all layers)!!!!')
+            reinitialized_model = model
+            desired_layers_keys = []
+            grad_mask = None
             fine_tune_loader = forget_retain_test_dl['retain_dl']
 
         loss_acc_retain_test_forget = fine_tune(reinitialized_model,
@@ -413,15 +415,17 @@ def main(argv):
                                                 )
 
     unlearning_model = copy.deepcopy(reinitialized_model)
-    print('Unlearning forget accuracy is', loss_accuracy_dataset(unlearning_model,
-                                                                 forget_retain_test_dl['forget_dl']))
 
     logging.info('Fine_tuned the model and evaluated it on retain, test and forget set!')
-    # =================================================================================================================
+
+    logging.info('Unlearning retain, forget and test accuracies are: %s, %s and %s',
+                 loss_acc_retain_test_forget['retain_acc'][-1],
+                 loss_acc_retain_test_forget['forget_acc'][-1],
+                 loss_acc_retain_test_forget['test_acc'][-1])
 
     logging.info('Saving the unlearning evaluation statistics and model ...')
     save_dir = os.path.join(_BASE_DIR.value,
-                            '{}_{}_reset_finetune_stats_{}_{}_run_{}.pth'.format(
+                            '{}_{}_stats_{}_{}_run_{}.pth'.format(
                                 _MODEL.value,
                                 _DATASET.value,
                                 _FORGET_MODE.value,
@@ -429,7 +433,7 @@ def main(argv):
                                 _RUN.value))
 
     save_dir_model = os.path.join(_BASE_DIR.value,
-                                  '{}_{}_reset_finetune_model_{}_{}_run_{}.pth'.format(
+                                  '{}_{}_model_{}_{}_run_{}.pth'.format(
                                       _MODEL.value,
                                       _DATASET.value,
                                       _FORGET_MODE.value,
