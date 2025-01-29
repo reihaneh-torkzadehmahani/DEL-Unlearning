@@ -22,6 +22,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+"""Generates localization mask for localized unlearning algorithms DEL and Salun"""
+# Reference: SalUn github repo
+
 from absl import flags, app
 
 from collections import OrderedDict
