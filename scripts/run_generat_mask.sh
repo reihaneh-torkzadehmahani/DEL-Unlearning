@@ -11,12 +11,12 @@ forget_data_dir='./data/cifar10_forget_indices.pth'
 pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 
 ###----------------------.SVHN-ViT
-dataset='svhn'
-model='vit'
-forget_mode='non-iid'
-forget_classes=(3 6)
-forget_data_dir='./data/svhn_forget_indices.pth'
-pretrained_dir='./data/pretrained_model_vit_svhn.pth'
+#dataset='svhn'
+#model='vit'
+#forget_mode='non-iid'
+#forget_classes=(3 6)
+#forget_data_dir='./data/svhn_forget_indices.pth'
+#pretrained_dir='./data/pretrained_model_vit_svhn.pth'
 
 
 ###----------------------.ImageNet100-ResNet50

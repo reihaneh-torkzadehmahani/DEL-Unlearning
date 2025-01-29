@@ -150,6 +150,7 @@ def create_dataset(dataset_name: str, batch_size: int) -> Dict[str, Any]:
         test_ds.set_transform(transform=validation_transform)
         train_ds = ImageNet100(train_ds)
         test_ds = ImageNet100(test_ds)
+        # !Takes some  time!
         train_ds.targets = [train_ds[i][1] for i in range(len(train_ds))]
 
     else:

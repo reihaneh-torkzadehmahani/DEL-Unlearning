@@ -9,12 +9,12 @@ forget_mode='non-iid'
 forget_classes=(2 5)
 
 ###----------------------.SVHN-ViT
-dataset='svhn'
-model='vit'
-learning_rate=0.05
-epochs=3
-forget_mode='non-iid'
-forget_classes=(3 6)
+#dataset='svhn'
+#model='vit'
+#learning_rate=0.05
+#epochs=3
+#forget_mode='non-iid'
+#forget_classes=(3 6)
 #forget_data_dir='./data/svhn_forget_indices.pth'
 
 

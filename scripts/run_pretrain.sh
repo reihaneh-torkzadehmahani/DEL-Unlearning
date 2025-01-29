@@ -7,10 +7,10 @@
 #epochs=30
 
 ###----------------------.SVHN-ViT
-dataset='svhn'
-model='vit'
-learning_rate=0.05
-epochs=3
+#dataset='svhn'
+#model='vit'
+#learning_rate=0.05
+#epochs=30
 
 ###----------------------.ImageNet100-ResNet50
 #dataset='imagenet100'
