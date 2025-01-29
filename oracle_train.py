@@ -206,14 +206,14 @@ def plot_save_stats(stats_dict: Dict[str, List[float]], save_dir: str) -> None:
     fig, axes = plt.subplots(1, 2, figsize=(10, 7))
 
     # plotting the train and test accuracies
-    axes[0].plot(stats_dict['train_acc'], color='green', label='train', linewidth=2)
+    axes[0].plot(stats_dict['retain_acc'], color='green', label='retain', linewidth=2)
     axes[0].plot(stats_dict['test_acc'], color='blue', label='test', linewidth=2)
     axes[0].set_xlabel('Epoch')
     axes[0].set_ylabel('Accuracy')
     axes[0].legend()
 
     # plotting the train and test losses
-    axes[1].plot(stats_dict['train_loss'], color='green', label='train', linewidth=2)
+    axes[1].plot(stats_dict['retain_loss'], color='green', label='retain', linewidth=2)
     axes[1].plot(stats_dict['test_loss'], color='blue', label='test', linewidth=2)
     axes[1].set_xlabel('Epoch')
     axes[1].set_ylabel('Loss')

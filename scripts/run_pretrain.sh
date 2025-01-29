@@ -1,16 +1,16 @@
 #!/bin/bash
 
 ###----------------------.CIFAR10-ResNet18
-dataset='cifar10'
-model='resnet18'
-learning_rate=0.1
-epochs=30
+#dataset='cifar10'
+#model='resnet18'
+#learning_rate=0.1
+#epochs=30
 
 ###----------------------.SVHN-ViT
-#dataset='svhn'
-#model='vit'
-#learning_rate=0.05
-#epochs=30
+dataset='svhn'
+model='vit'
+learning_rate=0.05
+epochs=3
 
 ###----------------------.ImageNet100-ResNet50
 #dataset='imagenet100'

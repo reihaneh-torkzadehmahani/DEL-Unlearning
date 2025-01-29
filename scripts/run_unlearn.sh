@@ -11,13 +11,14 @@ forget_data_dir='./data/cifar10_non-iid_forget_indices.pth'
 pretrained_dir='./data/pretrained_model_resnet18_cifar10.pth'
 
 ###----------------------.SVHN-ViT
-#dataset='svhn'
-#model='vit'
-#learning_rate=0.05
-#epochs=30
-#forget_mode='non-iid'
-#forget_classes=(3 6)
-#forget_data_dir='./data/svhn_forget_indices.pth'
+dataset='svhn'
+model='vit'
+learning_rate=0.05
+epochs=3
+forget_mode='non-iid'
+forget_classes=(3 6)
+forget_data_dir='./data/svhn_forget_indices.pth'
+pretrained_dir='./data/pretrained_model_vit_svhn.pth'
 
 
 ###----------------------.ImageNet100-ResNet50
@@ -34,7 +35,8 @@ forget_ratio=0.1
 #forget_mode='iid'
 #forget_classes=(-1)
 base_dir='./data/'
-mask_dir='./data/mask_resnet18_cifar10_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
+#mask_dir='./data/mask_resnet18_cifar10_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
+mask_dir='./data/mask_vit_svhn_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
 unlearning_alg='reset+finetune'
 
 for r in {1..3}
