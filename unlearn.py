@@ -50,25 +50,19 @@ _FORGET_MODE = flags.DEFINE_enum('forget_mode', 'iid', ['iid', 'non-iid'], 'Mode
 _FORGET_CLASSES = flags.DEFINE_list('forget_classes', [-1], 'Classes of forget samples')
 
 _PRETRAINED_DIR = flags.DEFINE_string('pretrained_dir',
-                                      './data/base/pretrained_model_resnet18_cifar10_noisy_indices_0.pth',
+                                      './data/pretrained_model_resnet18_cifar10.pth',
                                       'The directory where the pretrained model is.')
 
-_RUN = flags.DEFINE_integer('run', 0, 'Run number')
 _MASK_DIR = flags.DEFINE_string('mask_dir',
-                                './data/mask_iid_0.1_grad_param_with_0.3.pt',
+                                './data/mask_resnet18_cifar10_iid_0.1_weighted_grad_channel_thr_0.3.pt',
                                 'The directory of mask for critical parameters.')
-#  =================================================================================================
-_RELABEL = flags.DEFINE_bool('relabel', False, 'applying relabeling on forget set(salun unlearning algo)')
-
-
-_GRAD_MODE = flags.DEFINE_enum('grad_mode', 'reset+finetune',
+_UNLEARNING_ALG = flags.DEFINE_enum('unlearning_alg', 'reset+finetune',
                                ['negrad+', 'descent', 'reset+finetune', 'l1_sparse', 'wfisher', 'ga', 'ssd'],
-                               'The forget set mode.')
-np.random.seed(0)
-random.seed(25)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
+                               'Unlearning algorithm.')
 
+_RUN = flags.DEFINE_integer('run', 0, 'Run number')
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def save_stats(stats_dict: Dict[str, List[float]], save_dir: str) -> None:
     """Saves the evaluation statistics.
@@ -81,6 +75,32 @@ def save_stats(stats_dict: Dict[str, List[float]], save_dir: str) -> None:
     torch.save(stats_dict, save_dir)
     logging.info('Saved the evaluation stats at %s', save_dir)
 
+def loss_accuracy_dataset(model: nn.Module, dataset: DataLoader) -> Dict[str, float]:
+    """ Computes loss and accuracy of the model on a given set.
+    Args:
+        model: The model to be evaluated.
+        dataset: The dataset to evaluate the model on.
+    Returns:
+        A dict with 'loss' and 'acc' as the keys whose values are the loss and accuracy of the model on the dataset.
+    """
+    loss_all_batches = []
+    acc_all_batches = []
+    num_all_samples = 0
+    model.eval()
+    with torch.no_grad():
+        for _, images, labels in dataset:
+            images, labels = images.to(device), labels.to(device)
+            logits = model(images)
+            loss_batch = nn.CrossEntropyLoss()(logits, labels)
+            loss_all_batches.append(loss_batch)
+
+            prediction = torch.argmax(logits, 1)
+            acc_all_batches.append((prediction == labels).sum().item())
+            num_all_samples += len(labels)
+
+    loss_epoch = sum(loss_all_batches) / len(loss_all_batches)
+    acc_epoch = sum(acc_all_batches) / num_all_samples
+    return {'loss': loss_epoch.item(), 'acc': acc_epoch}
 
 def reset_params(mask: nn.Module, model: nn.Module, init_model: nn.Module):
     reinit_model = copy.deepcopy(model)
@@ -98,7 +118,7 @@ def fine_tune_epoch(model: nn.Module,
                     optimizer: optim.Optimizer,
                     scheduler: lr_scheduler,
                     mask=None,
-                    grad_mode='descent',
+                    unlearning_alg='reset+finetune',
                     epoch=0,
                     num_epochs=0
                     ) -> Dict[str, float]:
@@ -110,7 +130,7 @@ def fine_tune_epoch(model: nn.Module,
         optimizer: The optimizer.
         scheduler: Learning rate scheduler.
         mask: Mask of critical parameters.
-        grad_mode: Mode for taking gradients (e.g. 'descent').
+        unlearning_alg: The unlearning algorithm (e.g. 'reset+finetune').
         epoch: Current epoch.
         num_epochs: Total number of epochs.
     Returns:
@@ -130,18 +150,18 @@ def fine_tune_epoch(model: nn.Module,
         logits = model(images)
         loss_retain = loss_fn(logits, labels)
 
-        if grad_mode == 'descent' or grad_mode == 'reset+finetune':
+        if unlearning_alg == 'relabeling' or unlearning_alg == 'reset+finetune':
             loss_batch = loss_retain
-        elif grad_mode == 'ga':
+        elif unlearning_alg == 'ga':
             forget_logits = model(forget_images)
             loss_forget = loss_fn(forget_logits, forget_labels)
             loss_batch = -loss_forget
-        elif grad_mode == 'negrad+':
+        elif unlearning_alg == 'negrad+':
             forget_logits = model(forget_images)
             loss_forget = loss_fn(forget_logits, forget_labels)
             alpha = 0.99
             loss_batch = (alpha * loss_retain) - ((1 - alpha) * loss_forget)
-        elif grad_mode == 'l1_sparse':
+        elif unlearning_alg == 'l1_sparse':
             alpha = 7e-5
             current_alpha = alpha * (1 - epoch / num_epochs)
 
@@ -173,33 +193,6 @@ def fine_tune_epoch(model: nn.Module,
     acc_epoch = sum(acc_all_batches) / num_all_samples
     return {'loss_retain_epoch': loss_epoch.item(), 'acc_retain_epoch': acc_epoch}
 
-def loss_accuracy_dataset(model: nn.Module, dataset: DataLoader) -> Dict[str, float]:
-    """ Computes loss and accuracy of the model on a given set.
-    Args:
-        model: The model to be evaluated.
-        dataset: The dataset to evaluate the model on.
-    Returns:
-        A dict with 'loss' and 'acc' as the keys whose values are the loss and accuracy of the model on the dataset.
-    """
-    loss_all_batches = []
-    acc_all_batches = []
-    num_all_samples = 0
-    model.eval()
-    with torch.no_grad():
-        for _, images, labels in dataset:
-            images, labels = images.to(device), labels.to(device)
-            logits = model(images)
-            loss_batch = nn.CrossEntropyLoss()(logits, labels)
-            loss_all_batches.append(loss_batch)
-
-            prediction = torch.argmax(logits, 1)
-            acc_all_batches.append((prediction == labels).sum().item())
-            num_all_samples += len(labels)
-
-    loss_epoch = sum(loss_all_batches) / len(loss_all_batches)
-    acc_epoch = sum(acc_all_batches) / num_all_samples
-    return {'loss': loss_epoch.item(), 'acc': acc_epoch}
-
 def fine_tune(model: nn.Module,
               retain_dl: DataLoader,
               test_dl: DataLoader,
@@ -209,8 +202,7 @@ def fine_tune(model: nn.Module,
               num_epochs: int,
               update_layers: List[str] = [],
               mask=None,
-              relabel=False,
-              grad_mode='descent'
+              unlearning_alg='reset+finetune'
               ) -> Dict[str, List[float]]:
     """Trains the model.
         Args:
@@ -223,8 +215,7 @@ def fine_tune(model: nn.Module,
             num_epochs: Number of training epochs.
             update_layers: Layers to update and not freeze.
             mask: Mask of critical parameters.
-            relabel: True, if relabeling should be applied.
-            grad_mode: Mode for taking gradients (e.g. 'descent').
+            unlearning_alg: The unlearning algorithm (e.g. 'reset+finetune').
 
         Returns:
             A dict with 'retain_loss', 'retain_acc', 'test_loss','forget_loss', 'forget_acc', 'test_acc' keys whose
@@ -238,11 +229,11 @@ def fine_tune(model: nn.Module,
     test_accuracy_all_epochs = []
     all_steps = num_epochs
     optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
-    if not relabel and (grad_mode == 'descent' or grad_mode == 'l1_sparse' or grad_mode == 'reset+finetune'):
+    if  unlearning_alg == 'l1_sparse' or unlearning_alg == 'reset+finetune':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.01 * lr)
-    elif relabel:
+    elif unlearning_alg == 'relabel':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=all_steps, eta_min=0.5 * lr, verbose=True)
-    elif grad_mode == 'negrad+' or grad_mode == 'ga':
+    elif unlearning_alg == 'negrad+' or unlearning_alg == 'ga':
         constant_lr = lambda epoch: 1.0
         scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=constant_lr, verbose=True)
     # Computes the retain, forget and test statistics right after resetting
@@ -278,7 +269,7 @@ def fine_tune(model: nn.Module,
                                               optimizer,
                                               scheduler,
                                               mask=mask,
-                                              grad_mode=grad_mode,
+                                              unlearning_alg=unlearning_alg,
                                               epoch=epoch,
                                               num_epochs=num_epochs
                                               )
@@ -315,7 +306,7 @@ def main(argv):
     logging.info('Loaded the pretrained model!')
 
     # ------------------------------- Retrain-free Unlearning Algorithms: WFisher(IU) and SSD --------------------------
-    if _GRAD_MODE.value == 'wfisher':
+    if _UNLEARNING_ALG.value == 'wfisher':
         pretrained_model = copy.deepcopy(model)
         # -- for cifar10/resnet18 IID alpha=42000, non-IID: alpha=1900
         # -- for svhn/vit IID alpha = 4000, non-IID: alpha=6000
@@ -335,7 +326,7 @@ def main(argv):
         loss_acc_retain_test_forget = {'retain_loss': [loss_acc_test['loss']], 'retain_acc': [loss_acc_retain['acc']],
                                        'test_loss': [loss_acc_test['loss']], 'test_acc': [loss_acc_test['acc']],
                                        'forget_loss': [loss_acc_forget['loss']], 'forget_acc': [loss_acc_forget['acc']]}
-    elif _GRAD_MODE.value == 'ssd':
+    elif _UNLEARNING_ALG.value == 'ssd':
         pretrained_model = copy.deepcopy(model)
         # -- n_forget = 100 : selection_weighting = 5, n_forget = 5000,
         # -- (cifar10 dampening = 1 and selection weighting = 1 for iid, 16 for non-iid)
@@ -376,7 +367,7 @@ def main(argv):
         salun_mask = torch.load(mask_dir)
         logging.info('Loaded Salun mask from %s', mask_dir)
         # --------------------- Unlearning steps : reset critical params, finetune only on the retain
-        if _GRAD_MODE.value == 'reset+finetune':
+        if _UNLEARNING_ALG.value == 'reset+finetune':
             reinitialized_model = reset_params(salun_mask, model, init_model)
             desired_layers_keys = []
             grad_mask = salun_mask
@@ -391,8 +382,8 @@ def main(argv):
             grad_mask = None
         # --- CLEAN up to here !!!
 
-        if _RELABEL.value:
-            print('relabeling is active!!!!')
+        if _UNLEARNING_ALG.value == 'relabel':
+            logging.info('Relabeling is applied!!!!')
             #### Unlearning steps : relabel F, create F`+R=T`,finetune on T` while grads=grads*mask (update only critical)
             #### Step 1: relabel the forget set s.t. all the labels are flipped
             forget_dataset = copy.deepcopy(forget_retain_test_dl['clean_forget_dl'].dataset)
@@ -403,9 +394,11 @@ def main(argv):
             # step 2: create the new train loader containing the relabeled forget set and the retain set
             retain_dataset = forget_retain_test_dl['retain_dl'].dataset
             train_dataset = torch.utils.data.ConcatDataset([forget_dataset, retain_dataset])
-            fine_tune_loader = torch.utils.data.DataLoader(train_dataset, batch_size=_BATCH_SIZE.value, shuffle=True,
+            fine_tune_loader = torch.utils.data.DataLoader(train_dataset,
+                                                           batch_size=_BATCH_SIZE.value,
+                                                           shuffle=True,
                                                            num_workers=10)
-            # step 3: fine tune the new model on the new training loader while only finetuning the params with value 1 in mask
+            # step 3: finetune the new model on the new training loader while only finetuning the params with value 1 in mask
         else:
             fine_tune_loader = forget_retain_test_dl['retain_dl']
 
@@ -418,8 +411,7 @@ def main(argv):
                                                 _N_EPOCHS.value,
                                                 update_layers=desired_layers_keys,
                                                 mask=grad_mask,
-                                                relabel=_RELABEL.value,
-                                                grad_mode=_GRAD_MODE.value,
+                                                unlearning_alg=_UNLEARNING_ALG.value,
                                                 )
 
     unlearning_model = copy.deepcopy(reinitialized_model)
@@ -431,21 +423,19 @@ def main(argv):
 
     logging.info('Saving the unlearning evaluation statistics and model ...')
     save_dir = os.path.join(_BASE_DIR.value,
-                            '{}_{}_reset_finetune_stats_{}_relabel_{}_{}_run_{}.pth'.format(
+                            '{}_{}_reset_finetune_stats_{}_{}_run_{}.pth'.format(
                                 _MODEL.value,
                                 _DATASET.value,
                                 _FORGET_MODE.value,
-                                _RELABEL.value,
-                                _GRAD_MODE.value,
+                                _UNLEARNING_ALG.value,
                                 _RUN.value))
 
     save_dir_model = os.path.join(_BASE_DIR.value,
-                                  '{}_{}_reset_finetune_model_{}_relabel_{}_{}_run_{}.pth'.format(
+                                  '{}_{}_reset_finetune_model_{}_{}_run_{}.pth'.format(
                                       _MODEL.value,
                                       _DATASET.value,
                                       _FORGET_MODE.value,
-                                      _RELABEL.value,
-                                      _GRAD_MODE.value,
+                                      _UNLEARNING_ALG.value,
                                       _RUN.value))
     save_stats(loss_acc_retain_test_forget, save_dir)
     save_model(unlearning_model, save_dir_model)

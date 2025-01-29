@@ -35,6 +35,7 @@ forget_ratio=0.1
 #forget_classes=(-1)
 base_dir='./data/'
 mask_dir='./data/mask_resnet18_cifar10_non-iid_0.1_weighted_grad_channel_thr_0.3.pt'
+unlearning_alg='reset+finetune'
 
 
 for r in {1..3}
@@ -48,16 +49,10 @@ do
 	    				         --forget_classes ${forget_classes[@]}\
 	    				         --learning_rate $learning_rate\
     					         --mask_dir $mask_dir \
+    					         --unlearning_alg $unlearning_alg \
 	    	               --epochs $epochs \
 								       --run $r \
 
 
 
 done
-
-#	                     --reset_method $reset_method \
-#						           --grad_mode $grad_mode \
-#                       --alpha $alpha \
-#                       --update_layers $update_layers \
-#                       --learning_rate $lr \
-#                       --salun_base_name $salun_base_name \
