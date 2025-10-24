@@ -91,3 +91,16 @@ settings (i.e., SVHN/ViT and ImageNet-100/ResNet-50 with arbitrary IID or Non-II
                       --mask_dir path_to_the_localization_mask \
                       --unlearning_alg unlearning_algorithm \
       ```
+# Citation
+If you find the provided code useful for your research, please consider citing our paper:
+```bibtex
+@article{
+torkzadehmahani2025improved,
+title={Improved Localized Machine Unlearning Through the Lens of Memorization},
+author={Reihaneh Torkzadehmahani and Reza Nasirigerdeh and Georgios Kaissis and Daniel Rueckert and Gintare Karolina Dziugaite and Eleni Triantafillou},
+journal={Transactions on Machine Learning Research},
+issn={2835-8856},
+year={2025},
+url={https://openreview.net/forum?id=zXAVdHYPIB},
+note={}
+}
