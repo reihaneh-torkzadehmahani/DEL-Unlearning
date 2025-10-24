@@ -1,5 +1,5 @@
 # Deletion by Example Localization (DEL)
-"Improved Localized Machine Unlearning Through the Lens of Memorization", Under review at ICML
+"Improved Localized Machine Unlearning Through the Lens of Memorization", accepted in Transactions on Machine Learning Research (TMLR)
 
 Deletion by Example Localization (DEL) has two components: a localization strategy that identifies critical parameters 
 for a given set of examples, and a simple unlearning algorithm that finetunes only the critical parameters on the data 
